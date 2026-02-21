@@ -1,0 +1,58 @@
+# Root .gitignore for EvalDesk (client + server)
+
+# Node modules (applies recursively)
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+/.parcel-cache/
+/.vite/
+/.cache/
+
+# Dependency directories for monorepos / nested projects
+/client/dist/
+/client/build/
+
+# Environment files
+.env
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+logs/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Runtime files
+pids/
+*.pid
+*.seed
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.iml
+
+# Package distribution
+*.tgz
+
+# Misc
+.env.local
