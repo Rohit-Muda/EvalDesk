@@ -1,0 +1,15 @@
+# Server-specific ignores
+node_modules/
+.env
+npm-debug.log*
+logs/
+*.log
+pids/
+*.pid
+coverage/
+.nyc_output/
+db/*.sqlite
+uploads/
+.vscode/
+.DS_Store
+
