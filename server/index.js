@@ -40,11 +40,19 @@ app.get('/api/debug', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     mongodb_configured: !!process.env.MONGODB_URI,
     google_configured: !!process.env.GOOGLE_CLIENT_ID,
-    jwt_configured: !!process.env.JWT_SECRET
+    jwt_configured: !!process.env.JWT_SECRET,
+    routes: [
+      '/api/auth',
+      '/api/events',
+      '/api/teams',
+      '/api/scores',
+      '/api/jury',
+      '/api/tracking'
+    ]
   });
 });
 
-// API Routes (protected)
+// ✅ API Routes - MAKE SURE THESE ARE HERE
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/teams', teamRoutes);
@@ -58,22 +66,26 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found', path: req.path });
+});
+
 // Start server
 const startServer = async () => {
   try {
     await connectDB();
-    console.log('✅ MongoDB connected');
+    console.log('MongoDB connected');
   } catch (err) {
-    console.error('⚠️ MongoDB connection failed:', err.message);
-    console.error('Continuing without database...');
+    console.error('MongoDB connection failed:', err.message);
   }
 
   const server = app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? '✅' : '❌'}`);
   });
 
-  // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM signal received: closing HTTP server');
     server.close(() => {
