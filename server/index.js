@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import cookieSession from 'cookie-session';
+import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
 import passport from './config/passport.js';
 import authRoutes from './routes/auth.js';
@@ -81,6 +82,7 @@ app.get('/api/debug', (req, res) => {
     ok: true,
     environment: process.env.NODE_ENV || 'development',
     mongodb_configured: !!process.env.MONGODB_URI,
+    mongodb_state: mongoose.connection.readyState, // 0=disconnected,1=connected,2=connecting
     google_configured: !!process.env.GOOGLE_CLIENT_ID,
     jwt_configured: !!process.env.JWT_SECRET,
     routes: [
@@ -92,6 +94,17 @@ app.get('/api/debug', (req, res) => {
       '/api/tracking'
     ]
   });
+});
+
+// Live DB connectivity test — actually queries Atlas
+app.get('/api/test-db', async (req, res) => {
+  try {
+    await connectDB();
+    await mongoose.connection.db.admin().ping();
+    res.json({ ok: true, message: 'MongoDB Atlas is reachable', state: mongoose.connection.readyState });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message, code: err.code });
+  }
 });
 
 // ✅ API Routes - MAKE SURE THESE ARE HERE
