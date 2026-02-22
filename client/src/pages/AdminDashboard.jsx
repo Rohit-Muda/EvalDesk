@@ -9,6 +9,7 @@ export default function AdminDashboard() {
   const [newName, setNewName] = useState('');
   const [newDomains, setNewDomains] = useState('');
   const [error, setError] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     loadEvents();
@@ -20,7 +21,8 @@ export default function AdminDashboard() {
       setList(data);
       setError(null);
     } catch (err) {
-      setError('Failed to load events');
+      setError('Failed to load events: ' + err.message);
+      setList([]);
     } finally {
       setLoading(false);
     }
@@ -33,22 +35,34 @@ export default function AdminDashboard() {
       return;
     }
 
-    const domains = newDomains.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
+    setCreating(true);
     try {
+      const domains = newDomains.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
       const event = await events.create({ name: newName, allowedDomains: domains });
       setList(prev => [event, ...prev]);
       setShowCreate(false);
       setNewName('');
       setNewDomains('');
+      setError(null);
     } catch (err) {
-      alert(err.message);
+      setError('Failed to create event: ' + err.message);
+    } finally {
+      setCreating(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full" />
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold text-slate-800">Events</h1>
+          <div className="h-10 w-24 bg-slate-200 rounded-lg animate-pulse" />
+        </div>
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -60,15 +74,16 @@ export default function AdminDashboard() {
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="rounded-xl bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700"
+          className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 transition active:scale-95 disabled:opacity-50"
+          disabled={showCreate}
         >
-          New event
+          + New event
         </button>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-          {error}
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          ⚠️ {error}
         </div>
       )}
 
@@ -83,26 +98,31 @@ export default function AdminDashboard() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             placeholder="Event name"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 mb-3 text-sm"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 mb-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+            autoFocus
+            disabled={creating}
           />
           <textarea
             value={newDomains}
             onChange={e => setNewDomains(e.target.value)}
             placeholder="Allowed domains (one per line or comma-separated)"
             rows={3}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 mb-3 text-sm"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 mb-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+            disabled={creating}
           />
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-medium"
+              className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 transition active:scale-95 disabled:opacity-50"
+              disabled={creating}
             >
-              Create
+              {creating ? 'Creating...' : 'Create'}
             </button>
             <button
               type="button"
               onClick={() => setShowCreate(false)}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 transition disabled:opacity-50"
+              disabled={creating}
             >
               Cancel
             </button>
@@ -110,48 +130,58 @@ export default function AdminDashboard() {
         </form>
       )}
 
-      <ul className="space-y-2">
-        {list.map(ev => (
-          <li
-            key={ev._id}
-            className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm"
+      {list.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <div className="text-5xl mb-3">📋</div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">No events yet</h3>
+          <p className="text-slate-600 mb-4">Create your first event to get started</p>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 transition"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-medium text-slate-800">{ev.name}</span>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  to={'/dashboard/admin/events/' + ev._id + '/teams'}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-                >
-                  Teams & QR
-                </Link>
-                <Link
-                  to={'/dashboard/admin/events/' + ev._id + '/jury'}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-                >
-                  Jury
-                </Link>
-                <Link
-                  to={'/dashboard/admin/events/' + ev._id + '/tracking'}
-                  className="rounded-lg bg-slate-800 text-white px-3 py-1.5 text-sm hover:bg-slate-700"
-                >
-                  Tracking
-                </Link>
+            Create event
+          </button>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {list.map(ev => (
+            <li
+              key={ev._id}
+              className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex-1">
+                  <p className="font-medium text-slate-800 mb-1">{ev.name}</p>
+                  {ev.allowedDomains && ev.allowedDomains.length > 0 && (
+                    <p className="text-xs text-slate-600">
+                      🔒 Domains: {ev.allowedDomains.join(', ')}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    to={'/dashboard/admin/events/' + ev._id + '/teams'}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 transition active:scale-95"
+                  >
+                    Teams & QR
+                  </Link>
+                  <Link
+                    to={'/dashboard/admin/events/' + ev._id + '/jury'}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 transition active:scale-95"
+                  >
+                    Jury
+                  </Link>
+                  <Link
+                    to={'/dashboard/admin/events/' + ev._id + '/tracking'}
+                    className="rounded-lg bg-slate-800 text-white px-3 py-1.5 text-sm hover:bg-slate-700 transition active:scale-95"
+                  >
+                    Tracking
+                  </Link>
+                </div>
               </div>
-            </div>
-            {ev.allowedDomains && ev.allowedDomains.length > 0 && (
-              <p className="text-slate-500 text-xs mt-2">
-                Domains: {ev.allowedDomains.join(', ')}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {list.length === 0 && !showCreate && (
-        <p className="text-slate-500 text-center py-8">
-          No events yet. Create one to get started.
-        </p>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

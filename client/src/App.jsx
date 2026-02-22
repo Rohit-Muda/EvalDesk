@@ -12,37 +12,19 @@ import LiveTracking from './pages/LiveTracking';
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth();
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="animate-spin w-12 h-12 border-4 border-white border-t-blue-500 rounded-full" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full" />
       </div>
     );
   }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (roles && roles.length > 0 && !roles.includes(user.role)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-white mb-3">Access Denied</h1>
-          <p className="text-slate-300 mb-2">Your role ({user.role}) doesn't have permission to access this page.</p>
-          <p className="text-slate-500 text-sm">Please contact your administrator.</p>
-        </div>
-      </div>
-    );
-  }
-
+  if (!user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
 export default function App() {
-  const { user, loading } = useAuth();
-
   return (
     <Routes>
       {/* Public Routes */}
@@ -50,80 +32,21 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/score/:qrToken" element={<ScorePage />} />
 
-      {/* Protected Routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <Protected>
-            <Layout />
-          </Protected>
-        }
-      >
+      {/* Protected Dashboard Routes */}
+      <Route path="/dashboard" element={<Protected><Layout /></Protected>}>
+        <Route index element={<Navigate to="/dashboard/admin" replace />} />
+        
         {/* Admin Routes */}
-        <Route
-          path="admin"
-          element={
-            <Protected roles={['admin']}>
-              <AdminDashboard />
-            </Protected>
-          }
-        />
-        <Route
-          path="admin/events/:eventId/teams"
-          element={
-            <Protected roles={['admin']}>
-              <EventTeams />
-            </Protected>
-          }
-        />
-        <Route
-          path="admin/events/:eventId/jury"
-          element={
-            <Protected roles={['admin']}>
-              <JuryAllocation />
-            </Protected>
-          }
-        />
-        <Route
-          path="admin/events/:eventId/tracking"
-          element={
-            <Protected roles={['admin']}>
-              <LiveTracking />
-            </Protected>
-          }
-        />
+        <Route path="admin" element={<Protected roles={['admin']}><AdminDashboard /></Protected>} />
+        <Route path="admin/events/:eventId/teams" element={<Protected roles={['admin']}><EventTeams /></Protected>} />
+        <Route path="admin/events/:eventId/jury" element={<Protected roles={['admin']}><JuryAllocation /></Protected>} />
+        <Route path="admin/events/:eventId/tracking" element={<Protected roles={['admin']}><LiveTracking /></Protected>} />
 
         {/* Jury Routes */}
-        <Route
-          path="jury"
-          element={
-            <Protected roles={['jury', 'admin']}>
-              <JuryDashboard />
-            </Protected>
-          }
-        />
-
-        {/* Catch-all */}
-        <Route
-          index
-          element={
-            <Navigate
-              to={
-                !loading && user
-                  ? user.role === 'admin'
-                    ? '/dashboard/admin'
-                    : user.role === 'jury'
-                    ? '/dashboard/jury'
-                    : '/dashboard/jury'
-                  : '/login'
-              }
-              replace
-            />
-          }
-        />
+        <Route path="jury" element={<Protected roles={['jury', 'admin']}><JuryDashboard /></Protected>} />
       </Route>
 
-      {/* Catch all unmatched routes */}
+      {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
