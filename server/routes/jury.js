@@ -22,15 +22,14 @@ router.post('/event/:eventId/allocations', requireRole('admin'), async (req, res
   try {
     const { judgeEmail, domains, maxTeams } = req.body;
     
-    // P1 FIX #1: Validate judge email
+    // Validate judge email
     if (!judgeEmail || typeof judgeEmail !== 'string' || !judgeEmail.trim()) {
       return res.status(400).json({ error: 'Judge email is required and must be a string' });
     }
 
-    // P0 FIX #5: Normalize judge email to lowercase
     const normalizedEmail = judgeEmail.trim().toLowerCase();
     
-    // Validate email format (basic)
+    // Validate email format
     if (!normalizedEmail.includes('@')) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
@@ -41,6 +40,53 @@ router.post('/event/:eventId/allocations', requireRole('admin'), async (req, res
     // Validate maxTeams
     const maxTeamsNum = Math.max(0, parseInt(maxTeams, 10) || 0);
 
+    // P2 FIX #1a: Check for overlapping team assignments
+    const existingAllocations = await JuryAllocation.find({
+      eventId: req.params.eventId
+    }).lean();
+
+    // Get all teams for this event
+    const allTeams = await Team.find({ eventId: req.params.eventId }).lean();
+
+    // Calculate teams this judge would see
+    let teamsThisJudge = allTeams;
+    if (domainList.length > 0) {
+      const domainSet = new Set(domainList.map(d => d.toLowerCase()));
+      teamsThisJudge = allTeams.filter(t => domainSet.has((t.domain || '').toLowerCase()));
+    }
+    if (maxTeamsNum > 0) {
+      teamsThisJudge = teamsThisJudge.slice(0, maxTeamsNum);
+    }
+
+    // Check for overlaps with other judges
+    const overlaps = [];
+    for (const otherAlloc of existingAllocations) {
+      if (otherAlloc.judgeEmail === normalizedEmail) continue; // Skip self
+
+      let otherTeams = allTeams;
+      if (otherAlloc.domains && otherAlloc.domains.length > 0) {
+        const otherDomainSet = new Set(otherAlloc.domains.map(d => d.toLowerCase()));
+        otherTeams = allTeams.filter(t => otherDomainSet.has((t.domain || '').toLowerCase()));
+      }
+      if (otherAlloc.maxTeams > 0) {
+        otherTeams = otherTeams.slice(0, otherAlloc.maxTeams);
+      }
+
+      // Find common teams
+      const commonTeams = teamsThisJudge.filter(t1 => 
+        otherTeams.some(t2 => t2._id.toString() === t1._id.toString())
+      );
+
+      if (commonTeams.length > 0) {
+        overlaps.push({
+          judge: otherAlloc.judgeEmail,
+          commonTeams: commonTeams.length,
+          teamNames: commonTeams.map(t => t.name)
+        });
+      }
+    }
+
+    // P2 FIX #1b: Warn about overlaps but allow (judges can score same team from different perspectives)
     const allocation = await JuryAllocation.findOneAndUpdate(
       { 
         eventId: req.params.eventId, 
@@ -55,7 +101,15 @@ router.post('/event/:eventId/allocations', requireRole('admin'), async (req, res
       { upsert: true, new: true }
     ).lean();
     
-    res.json(allocation);
+    console.log(`[AUDIT] Jury allocated - Email: ${normalizedEmail}, Domains: ${domainList || 'all'}, MaxTeams: ${maxTeamsNum}`);
+
+    res.json({
+      allocation,
+      warnings: overlaps.length > 0 ? {
+        message: 'This judge shares team assignments with other judges',
+        overlaps
+      } : null
+    });
   } catch (err) {
     console.error('POST /allocations error:', err);
     res.status(500).json({ error: err.message });
@@ -73,20 +127,21 @@ router.delete('/event/:eventId/allocations/:id', requireRole('admin'), async (re
       return res.status(404).json({ error: 'Allocation not found' });
     }
 
-    // P1 FIX #2: When allocation is deleted, check if judge has other allocations
-    // If not, downgrade to viewer
+    // Check if judge has other allocations
     const remainingAllocations = await JuryAllocation.findOne({
       judgeEmail: allocation.judgeEmail
     }).lean();
 
     if (!remainingAllocations) {
-      // P1 FIX #3: Downgrade user role to viewer if no more allocations
+      // Downgrade user role to viewer if no more allocations
       await User.updateOne(
         { email: allocation.judgeEmail },
         { role: 'viewer' }
       );
+      console.log(`[AUDIT] Judge ${allocation.judgeEmail} role downgraded to viewer (no allocations)`);
     }
 
+    console.log(`[AUDIT] Jury allocation deleted - Email: ${allocation.judgeEmail}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('DELETE /allocations error:', err);
@@ -102,7 +157,6 @@ function canJudgeAccess(judgeEmail, teamDomain, allocation) {
 
 router.get('/event/:eventId/my-teams', async (req, res) => {
   try {
-    // P0 FIX #6: Normalize jury email for lookup
     const normalizedEmail = req.userEmail.toLowerCase();
 
     const allocation = await JuryAllocation.findOne({
@@ -110,8 +164,6 @@ router.get('/event/:eventId/my-teams', async (req, res) => {
       judgeEmail: normalizedEmail,
     }).lean();
 
-    // P1 FIX #4: Return empty array (not error) if not allocated
-    // Frontend will show "No teams assigned" message
     if (!allocation) {
       return res.json([]);
     }
@@ -125,7 +177,6 @@ router.get('/event/:eventId/my-teams', async (req, res) => {
       filtered = teams.filter(t => domainSet.has((t.domain || '').toLowerCase()));
     }
 
-    // Apply max teams cap
     if (allocation.maxTeams > 0) {
       filtered = filtered.slice(0, allocation.maxTeams);
     }

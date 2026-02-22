@@ -14,14 +14,13 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 safe-area-top">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <NavLink to="/" className="text-lg font-semibold text-slate-800">
+          <NavLink to="/dashboard" className="text-lg font-semibold text-slate-800">
             EvalDesk
           </NavLink>
           <nav className="flex items-center gap-2">
-            {/* FIX #1: Only show admin nav if role is admin */}
             {user?.role === 'admin' && (
               <NavLink
-                to="/admin"
+                to="/dashboard/admin"
                 end
                 className={({ isActive }) =>
                   'px-3 py-1.5 rounded-lg text-sm font-medium ' +
@@ -33,11 +32,9 @@ export default function Layout() {
                 Admin
               </NavLink>
             )}
-
-            {/* FIX #2: Show jury nav for both jury and admin roles */}
             {(user?.role === 'jury' || user?.role === 'admin') && (
               <NavLink
-                to="/jury"
+                to="/dashboard/jury"
                 className={({ isActive }) =>
                   'px-3 py-1.5 rounded-lg text-sm font-medium ' +
                   (isActive
@@ -48,13 +45,7 @@ export default function Layout() {
                 Jury
               </NavLink>
             )}
-
-            {/* FIX #3: Show email only on larger screens */}
-            <span className="text-slate-500 text-sm hidden sm:inline">
-              {user?.email}
-            </span>
-
-            {/* FIX #4: Logout button */}
+            <span className="text-slate-500 text-sm hidden sm:inline">{user?.email}</span>
             <button
               type="button"
               onClick={handleLogout}
@@ -65,8 +56,6 @@ export default function Layout() {
           </nav>
         </div>
       </header>
-
-      {/* FIX #5: Main content area */}
       <main className="flex-1 p-4 pb-8 max-w-4xl mx-auto w-full">
         <Outlet />
       </main>

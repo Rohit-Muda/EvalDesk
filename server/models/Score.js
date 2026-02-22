@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 
 const scoreLogSchema = new mongoose.Schema({
-  action: String,
+  action: String, // 'submit', 'update', 'absent_toggle', 'unlock' (admin)
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  userName: String, // Store name for readability
+  userEmail: String, // Store email for readability
   timestamp: { type: Date, default: Date.now },
-  details: mongoose.Schema.Types.Mixed,
+  details: mongoose.Schema.Types.Mixed, // { criteriaScores, absent, oldValue, newValue }
 }, { _id: false });
 
 const scoreSchema = new mongoose.Schema({
@@ -18,6 +20,7 @@ const scoreSchema = new mongoose.Schema({
   logs: [scoreLogSchema],
 }, { timestamps: true });
 
+// Ensure unique score per (event, team, judge)
 scoreSchema.index({ eventId: 1, teamId: 1, judgeId: 1 }, { unique: true });
 
 export default mongoose.model('Score', scoreSchema);

@@ -1,134 +1,171 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { events, jury } from '../lib/api';
+import { useToast } from '../components/Toast';
 
 export default function JuryDashboard() {
   const [eventList, setEventList] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // FIX #13: Add error state
-  const [teamError, setTeamError] = useState(null); // FIX #14: Add team error state
+  const [error, setError] = useState(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
-    events.list()
-      .then(setEventList)
-      .catch((err) => {
-        // FIX #15: Show error feedback instead of silent fail
-        setError('Failed to load events: ' + err.message);
-        setEventList([]);
-      })
-      .finally(() => setLoading(false));
+    loadEvents();
   }, []);
+
+  const loadEvents = async () => {
+    try {
+      const data = await events.list();
+      setEventList(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load events');
+      addToast('Failed to load events', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedEventId) {
       setTeams([]);
-      setTeamError(null);
       return;
     }
 
-    // FIX #16: Reset error when selecting new event
-    setTeamError(null);
-
-    jury.myTeams(selectedEventId)
-      .then((data) => {
+    const loadTeams = async () => {
+      try {
+        const data = await jury.myTeams(selectedEventId);
         setTeams(data || []);
-        // FIX #17: Show message if no teams allocated
-        if (!data || data.length === 0) {
-          setTeamError('No teams assigned for this event');
-        }
-      })
-      .catch((err) => {
-        // FIX #18: Show error feedback instead of silent fail
-        setTeamError('Failed to load teams: ' + err.message);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load teams');
+        addToast('Failed to load teams', 'error');
         setTeams([]);
-      });
-  }, [selectedEventId]);
+      }
+    };
+
+    loadTeams();
+  }, [selectedEventId, addToast]);
 
   const statusClass = (s) => {
-    if (s === 'evaluated') return 'bg-emerald-100 text-emerald-800';
-    if (s === 'absent') return 'bg-amber-100 text-amber-800';
-    return 'bg-slate-100 text-slate-600';
+    if (s === 'evaluated') return 'badge-success';
+    if (s === 'absent') return 'badge-warning';
+    return 'badge-info';
   };
-  const statusLabel = (s) => s === 'evaluated' ? 'Evaluated' : s === 'absent' ? 'Absent' : 'Pending';
+
+  const statusLabel = (s) => s === 'evaluated' ? '✓ Evaluated' : s === 'absent' ? '⊘ Absent' : '⏱ Pending';
 
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="animate-spin w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full" />
+        <div className="spinner-lg" />
       </div>
     );
   }
 
-  return (
-    <div>
-      <h1 className="text-xl font-bold text-slate-800 mb-4">My teams</h1>
+  const evaluatedCount = teams.filter(t => t.status === 'evaluated').length;
+  const absentCount = teams.filter(t => t.status === 'absent').length;
+  const pendingCount = teams.filter(t => t.status === 'pending').length;
 
-      {/* FIX #19: Show error if events failed to load */}
+  return (
+    <div className="animate-fade-in">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">My Teams</h1>
+        <p className="text-slate-600">Evaluate assigned teams</p>
+      </div>
+
+      {/* Event Selector */}
+      <div className="mb-8">
+        <label className="block text-sm font-semibold text-slate-700 mb-3">
+          Select Event
+        </label>
+        <select
+          value={selectedEventId}
+          onChange={e => setSelectedEventId(e.target.value)}
+          className="select-field max-w-md"
+        >
+          <option value="">Choose an event...</option>
+          {eventList.map(ev => (
+            <option key={ev._id} value={ev._id}>
+              {ev.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Error Message */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          ⚠️ {error}
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          {error}
         </div>
       )}
 
-      <select
-        value={selectedEventId}
-        onChange={e => setSelectedEventId(e.target.value)}
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4 w-full max-w-xs"
-      >
-        <option value="">Select event</option>
-        {eventList.map(ev => (
-          <option key={ev._id} value={ev._id}>
-            {ev.name}
-          </option>
-        ))}
-      </select>
+      {/* Stats */}
+      {selectedEventId && (
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          {[
+            { label: 'Evaluated', count: evaluatedCount, color: 'emerald' },
+            { label: 'Pending', count: pendingCount, color: 'amber' },
+            { label: 'Absent', count: absentCount, color: 'red' }
+          ].map(stat => (
+            <div
+              key={stat.label}
+              className={`card p-4 border-l-4 border-${stat.color}-500 animate-fade-in`}
+            >
+              <p className={`text-sm font-semibold text-${stat.color}-700`}>{stat.label}</p>
+              <p className="text-3xl font-bold text-slate-900">{stat.count}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
+      {/* Teams List */}
       {selectedEventId && (
         <>
-          {/* FIX #20: Show error if teams failed to load */}
-          {teamError && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-              ℹ️ {teamError}
-            </div>
-          )}
-
           {teams.length === 0 ? (
-            <p className="text-slate-500">
-              {teamError
-                ? 'Please contact your event administrator or try selecting another event.'
-                : 'No teams assigned for this event.'}
-            </p>
+            <div className="text-center py-12 card">
+              <div className="text-5xl mb-4">📭</div>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">No teams assigned</h3>
+              <p className="text-slate-600">
+                You haven't been assigned any teams for this event yet
+              </p>
+            </div>
           ) : (
-            <ul className="space-y-2">
-              {teams.map(t => (
-                <li key={t._id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-slate-800">{t.name}</p>
-                      <p className="text-slate-500 text-sm">
-                        {t.project || '—'} · {t.domain || '—'}
+            <div className="space-y-3">
+              {teams.map((t, i) => (
+                <div
+                  key={t._id}
+                  className="card card-hover p-5 animate-fade-in"
+                  style={{ animationDelay: `${i * 50}ms` }}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-semibold text-slate-900 mb-1">
+                        {t.name}
+                      </h4>
+                      <p className="text-sm text-slate-600">
+                        {t.project || '—'} • {t.domain || '—'}
                       </p>
                     </div>
-                    <span
-                      className={
-                        'rounded-full px-2.5 py-0.5 text-xs font-medium ' +
-                        statusClass(t.status)
-                      }
-                    >
-                      {statusLabel(t.status)}
-                    </span>
+
+                    <div className="flex items-center gap-3">
+                      <span className={`badge ${statusClass(t.status)}`}>
+                        {statusLabel(t.status)}
+                      </span>
+                      <Link
+                        to={'/score/' + t.qrToken}
+                        className="btn-primary btn-sm"
+                      >
+                        Score
+                      </Link>
+                    </div>
                   </div>
-                  <Link
-                    to={'/score/' + t.qrToken}
-                    className="inline-block mt-2 text-sm text-slate-600 hover:text-slate-800 font-medium"
-                  >
-                    Open score page →
-                  </Link>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </>
       )}

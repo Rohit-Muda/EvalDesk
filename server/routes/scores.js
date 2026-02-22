@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Team from '../models/Team.js';
 import Score from '../models/Score.js';
 import JuryAllocation from '../models/JuryAllocation.js';
+import User from '../models/User.js';
 import { verifyToken } from '../middleware/auth.js';
 
 const router = Router();
@@ -18,7 +19,6 @@ router.get('/team/:qrToken', async (req, res) => {
     const team = await Team.findOne({ qrToken: req.params.qrToken }).populate('eventId').lean();
     if (!team) return res.status(404).json({ error: 'Team not found' });
 
-    // P0 FIX #7: Normalize email for jury lookup
     const normalizedEmail = req.userEmail.toLowerCase();
 
     const allocation = await JuryAllocation.findOne({
@@ -58,7 +58,6 @@ router.post('/team/:qrToken', async (req, res) => {
     const team = await Team.findOne({ qrToken: req.params.qrToken }).populate('eventId').lean();
     if (!team) return res.status(404).json({ error: 'Team not found' });
 
-    // P0 FIX #8: Normalize email for jury lookup
     const normalizedEmail = req.userEmail.toLowerCase();
 
     const allocation = await JuryAllocation.findOne({
@@ -70,14 +69,12 @@ router.post('/team/:qrToken', async (req, res) => {
       return res.status(403).json({ error: 'You are not assigned to evaluate this team' });
     }
 
-    // P0 FIX #9: Use findOne to check for existing score
     let score = await Score.findOne({
       eventId: team.eventId._id,
       teamId: team._id,
       judgeId: req.userId,
     });
 
-    // P0 FIX #10: If score already locked, reject submission
     if (score && score.locked) {
       return res.status(400).json({ error: 'Score already submitted and locked' });
     }
@@ -85,7 +82,6 @@ router.post('/team/:qrToken', async (req, res) => {
     const { criteriaScores, absent } = req.body;
     const rubric = team.eventId.rubric || [];
 
-    // Validate criteriaScores
     if (!Array.isArray(criteriaScores)) {
       return res.status(400).json({ error: 'Criteria scores must be an array' });
     }
@@ -98,15 +94,23 @@ router.post('/team/:qrToken', async (req, res) => {
         return val;
       });
 
+    // P1 FIX #4a: Enhanced audit log with user details
+    const judge = await User.findById(req.userId).lean();
     const logEntry = {
       action: 'submit',
       userId: req.userId,
+      userName: judge?.name || 'Unknown',
+      userEmail: judge?.email || normalizedEmail,
       timestamp: new Date(),
-      details: { criteriaScores: scores, absent: !!absent },
+      details: { 
+        criteriaScores: scores, 
+        absent: !!absent,
+        rubricLength: rubric.length,
+        totalScore: scores.reduce((a, b) => a + b, 0) / scores.length
+      },
     };
 
     if (!score) {
-      // P0 FIX #11: Create new score with locked=true (lock on submission)
       score = await Score.create({
         eventId: team.eventId._id,
         teamId: team._id,
@@ -118,7 +122,6 @@ router.post('/team/:qrToken', async (req, res) => {
         logs: [logEntry],
       });
     } else {
-      // P0 FIX #12: Update existing score and lock
       score.criteriaScores = scores;
       score.absent = !!absent;
       score.submittedAt = new Date();
@@ -128,6 +131,7 @@ router.post('/team/:qrToken', async (req, res) => {
       await score.save();
     }
 
+    console.log(`[AUDIT] Score submitted - Team: ${team.name}, Judge: ${normalizedEmail}, Score: ${scores}`);
     res.json(score);
   } catch (err) {
     console.error('POST /team/:qrToken error:', err);
@@ -140,7 +144,6 @@ router.patch('/team/:qrToken', async (req, res) => {
     const team = await Team.findOne({ qrToken: req.params.qrToken }).populate('eventId').lean();
     if (!team) return res.status(404).json({ error: 'Team not found' });
 
-    // P0 FIX #13: Normalize email for jury lookup
     const normalizedEmail = req.userEmail.toLowerCase();
 
     const allocation = await JuryAllocation.findOne({
@@ -165,6 +168,8 @@ router.patch('/team/:qrToken', async (req, res) => {
     const { criteriaScores, absent } = req.body;
     const rubric = team.eventId.rubric || [];
 
+    const judge = await User.findById(req.userId).lean();
+
     if (criteriaScores && Array.isArray(criteriaScores)) {
       score = score || await Score.create({
         eventId: team.eventId._id,
@@ -180,12 +185,18 @@ router.patch('/team/:qrToken', async (req, res) => {
         return Math.min(Math.max(Number(v) || 0, 0), max);
       });
 
+      // P1 FIX #4b: Log updates with details
       score.logs = score.logs || [];
       score.logs.push({
         action: 'update',
         userId: req.userId,
+        userName: judge?.name || 'Unknown',
+        userEmail: judge?.email || normalizedEmail,
         timestamp: new Date(),
-        details: { criteriaScores: score.criteriaScores },
+        details: { 
+          criteriaScores: score.criteriaScores,
+          averageScore: score.criteriaScores.reduce((a, b) => a + b, 0) / score.criteriaScores.length
+        },
       });
     }
 
@@ -200,21 +211,56 @@ router.patch('/team/:qrToken', async (req, res) => {
       });
 
       if (!score.locked) {
+        const oldAbsent = score.absent;
         score.absent = absent;
         score.logs = score.logs || [];
+        
+        // P1 FIX #4c: Log absent toggle with old/new values
         score.logs.push({
           action: 'absent_toggle',
           userId: req.userId,
+          userName: judge?.name || 'Unknown',
+          userEmail: judge?.email || normalizedEmail,
           timestamp: new Date(),
-          details: { absent },
+          details: { 
+            oldValue: oldAbsent,
+            newValue: absent
+          },
         });
       }
     }
 
     if (score) await score.save();
+    
+    console.log(`[AUDIT] Score updated - Team: ${team.name}, Judge: ${normalizedEmail}`);
     res.json(score || {});
   } catch (err) {
     console.error('PATCH /team/:qrToken error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// P1 FIX #4d: NEW endpoint to view audit logs (admin only)
+router.get('/audit/:scoreId', async (req, res) => {
+  try {
+    const score = await Score.findById(req.params.scoreId)
+      .populate('eventId', 'name')
+      .populate('teamId', 'name')
+      .populate('judgeId', 'name email')
+      .lean();
+
+    if (!score) return res.status(404).json({ error: 'Score not found' });
+
+    res.json({
+      team: score.teamId,
+      event: score.eventId,
+      judge: score.judgeId,
+      logs: score.logs || [],
+      createdAt: score.createdAt,
+      updatedAt: score.updatedAt,
+    });
+  } catch (err) {
+    console.error('GET /audit/:scoreId error:', err);
     res.status(500).json({ error: err.message });
   }
 });

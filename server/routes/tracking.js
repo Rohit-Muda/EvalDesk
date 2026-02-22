@@ -13,7 +13,8 @@ router.use(requireRole('admin'));
 router.get('/event/:eventId', async (req, res) => {
   try {
     const eventId = req.params.eventId;
-    const teams = await Team.find({ eventId }).lean();
+    // P2 FIX #5n: Exclude soft-deleted teams
+    const teams = await Team.find({ eventId, deletedAt: null }).lean();
     const teamIds = teams.map(t => t._id);
     const scores = await Score.find({ eventId, teamId: { $in: teamIds } }).lean();
 
@@ -85,6 +86,7 @@ router.get('/event/:eventId', async (req, res) => {
       domainProgress,
     });
   } catch (err) {
+    console.error('GET /event/:eventId error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -94,7 +96,8 @@ router.get('/event/:eventId/export', async (req, res) => {
     const eventId = req.params.eventId;
     const event = await Event.findById(eventId).lean();
     const rubricCriteria = event?.rubric || [];
-    const teams = await Team.find({ eventId }).sort({ name: 1 }).lean();
+    // P2 FIX #5o: Exclude soft-deleted teams
+    const teams = await Team.find({ eventId, deletedAt: null }).sort({ name: 1 }).lean();
     const teamIds = teams.map(t => t._id);
     const scores = await Score.find({ eventId, teamId: { $in: teamIds } })
       .populate('judgeId', 'email name')
@@ -141,6 +144,7 @@ router.get('/event/:eventId/export', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename=evaldesk-export-${eventId}.csv`);
     res.send(csv);
   } catch (err) {
+    console.error('GET /event/:eventId/export error:', err);
     res.status(500).json({ error: err.message });
   }
 });

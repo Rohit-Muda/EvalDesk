@@ -11,7 +11,8 @@ router.use(attachUser);
 
 router.get('/', async (req, res) => {
   try {
-    const list = await Event.find()
+    // P2 FIX #5e: Only return non-deleted events
+    const list = await Event.find({ deletedAt: null })
       .sort({ createdAt: -1 })
       .select('name allowedDomains rubric createdAt')
       .lean();
@@ -24,7 +25,8 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).lean();
+    // P2 FIX #5f: Check soft-delete
+    const event = await Event.findOne({ _id: req.params.id, deletedAt: null }).lean();
     if (!event) return res.status(404).json({ error: 'Event not found' });
     res.json(event);
   } catch (err) {
@@ -44,17 +46,14 @@ router.post('/', requireRole('admin'), async (req, res) => {
   try {
     const { name, allowedDomains, rubric } = req.body;
 
-    // P2 FIX #1: Validate event name
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'Event name is required' });
     }
 
-    // P2 FIX #2: Validate domains array
     const validDomains = Array.isArray(allowedDomains)
       ? allowedDomains.filter(d => d && typeof d === 'string')
       : [];
 
-    // P2 FIX #3: Validate rubric
     let validRubric = defaultRubric;
     if (rubric && Array.isArray(rubric) && rubric.length === 4) {
       const isValidRubric = rubric.every(c =>
@@ -73,8 +72,10 @@ router.post('/', requireRole('admin'), async (req, res) => {
       allowedDomains: validDomains,
       rubric: validRubric,
       createdBy: req.userId,
+      deletedAt: null,
     });
 
+    console.log(`[AUDIT] Event created - Name: ${event.name}, ID: ${event._id}`);
     res.status(201).json(event);
   } catch (err) {
     console.error('POST / error:', err);
@@ -84,6 +85,10 @@ router.post('/', requireRole('admin'), async (req, res) => {
 
 router.patch('/:id', requireRole('admin'), async (req, res) => {
   try {
+    // P2 FIX #5g: Check soft-delete before update
+    const event = await Event.findOne({ _id: req.params.id, deletedAt: null });
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
     const { name, allowedDomains, rubric } = req.body;
     const update = {};
 
@@ -114,10 +119,9 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
       }
     }
 
-    const event = await Event.findByIdAndUpdate(req.params.id, update, { new: true }).lean();
-    if (!event) return res.status(404).json({ error: 'Event not found' });
-
-    res.json(event);
+    const updatedEvent = await Event.findByIdAndUpdate(req.params.id, update, { new: true }).lean();
+    console.log(`[AUDIT] Event updated - ID: ${req.params.id}, Changes: ${JSON.stringify(update)}`);
+    res.json(updatedEvent);
   } catch (err) {
     console.error('PATCH /:id error:', err);
     res.status(500).json({ error: err.message });
@@ -126,20 +130,60 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
 
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
+    // P2 FIX #5h: Soft-delete instead of hard-delete
+    const event = await Event.findOne({ _id: req.params.id, deletedAt: null });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
-    // P0 FIX #14: Cascade delete related data
-    // This prevents orphaned records and ensures data integrity
-    await Promise.all([
-      Team.deleteMany({ eventId: req.params.id }),
-      Score.deleteMany({ eventId: req.params.id }),
-      JuryAllocation.deleteMany({ eventId: req.params.id }),
-    ]);
+    // Mark as deleted instead of removing
+    await Event.findByIdAndUpdate(req.params.id, {
+      deletedAt: new Date(),
+      deletedBy: req.userId
+    });
 
-    res.json({ ok: true });
+    // Also soft-delete all related teams
+    await Team.updateMany(
+      { eventId: req.params.id, deletedAt: null },
+      { 
+        deletedAt: new Date(),
+        deletedBy: req.userId
+      }
+    );
+
+    console.log(`[AUDIT] Event soft-deleted - ID: ${req.params.id}, By: ${req.userEmail}`);
+    res.json({ ok: true, message: 'Event deleted successfully' });
   } catch (err) {
     console.error('DELETE /:id error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// P2 FIX #5i: NEW endpoint to restore deleted event (admin only)
+router.post('/:id/restore', requireRole('admin'), async (req, res) => {
+  try {
+    const event = await Event.findOneAndUpdate(
+      { _id: req.params.id, deletedAt: { $ne: null } },
+      { 
+        deletedAt: null,
+        deletedBy: null
+      },
+      { new: true }
+    );
+
+    if (!event) return res.status(404).json({ error: 'Event not found or not deleted' });
+
+    // Also restore all soft-deleted teams
+    await Team.updateMany(
+      { eventId: req.params.id, deletedAt: { $ne: null } },
+      { 
+        deletedAt: null,
+        deletedBy: null
+      }
+    );
+
+    console.log(`[AUDIT] Event restored - ID: ${req.params.id}, By: ${req.userEmail}`);
+    res.json(event);
+  } catch (err) {
+    console.error('POST /:id/restore error:', err);
     res.status(500).json({ error: err.message });
   }
 });
