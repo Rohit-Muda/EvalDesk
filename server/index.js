@@ -15,6 +15,9 @@ import trackingRoutes from './routes/tracking.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust Vercel's proxy layer so req.secure, req.ip, etc. are correct
+app.set('trust proxy', 1);
+
 // Allowed CORS origins: support local dev and multiple production URLs
 const allowedOrigins = [
   'http://localhost:5173',
