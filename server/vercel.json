@@ -11,15 +11,5 @@
       "src": "/(.*)",
       "dest": "index.js"
     }
-  ],
-  "env": {
-    "MONGODB_URI": "@mongodb_uri",
-    "JWT_SECRET": "@jwt_secret",
-    "GOOGLE_CLIENT_ID": "@google_client_id",
-    "GOOGLE_CLIENT_SECRET": "@google_client_secret",
-    "ADMIN_EMAILS": "@admin_emails",
-    "FRONTEND_URL": "@frontend_url",
-    "BACKEND_URL": "@backend_url",
-    "NODE_ENV": "production"
-  }
+  ]
 }
