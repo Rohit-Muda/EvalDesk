@@ -14,10 +14,22 @@ import trackingRoutes from './routes/tracking.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Allowed CORS origins: support local dev and multiple production URLs
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 // Middleware
-app.use(cors({ 
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', 
-  credentials: true 
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS: origin not allowed: ' + origin));
+  },
+  credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -26,7 +38,7 @@ app.use(passport.initialize());
 
 // Health Check (no DB required)
 app.get('/api/health', (req, res) => {
-  res.json({ 
+  res.json({
     ok: true,
     message: 'Server is running',
     timestamp: new Date().toISOString()

@@ -20,11 +20,13 @@ export default function JuryAllocation() {
     e.preventDefault();
     const domainList = domains.split(/[\n,]/).map((d) => d.trim()).filter(Boolean);
     try {
-      const a = await jury.addAllocation(eventId, {
+      const result = await jury.addAllocation(eventId, {
         judgeEmail: judgeEmail.trim(),
         domains: domainList,
         maxTeams: parseInt(maxTeams, 10) || 0,
       });
+      // API returns { allocation, warnings } — extract the allocation object
+      const a = result.allocation || result;
       setAllocations((prev) => [...prev.filter((x) => x._id !== a._id), a]);
       setJudgeEmail('');
       setDomains('');
@@ -54,7 +56,7 @@ export default function JuryAllocation() {
   return (
     <div>
       <div className="mb-4">
-        <Link to="/admin" className="text-slate-500 text-sm hover:text-slate-700">
+        <Link to="/dashboard/admin" className="text-slate-500 text-sm hover:text-slate-700">
           Back to events
         </Link>
         <h1 className="text-xl font-bold text-slate-800 mt-1">

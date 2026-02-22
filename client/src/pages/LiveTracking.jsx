@@ -12,18 +12,18 @@ export default function LiveTracking() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    events.get(eventId).then(setEvent).catch(function() { setEvent(null); });
+    events.get(eventId).then(setEvent).catch(function () { setEvent(null); });
   }, [eventId]);
 
   useEffect(() => {
     if (!eventId) return;
-    const fetchStats = function() {
-      tracking.stats(eventId).then(setStats).catch(function() { setStats(null); });
+    const fetchStats = function () {
+      tracking.stats(eventId).then(setStats).catch(function () { setStats(null); });
     };
     fetchStats();
     setLoading(false);
     const t = setInterval(fetchStats, POLL_MS);
-    return function() { clearInterval(t); };
+    return function () { clearInterval(t); };
   }, [eventId]);
 
   const doExport = async () => {
@@ -49,7 +49,7 @@ export default function LiveTracking() {
   return (
     <div>
       <div className="mb-4">
-        <Link to="/admin" className="text-slate-500 text-sm hover:text-slate-700">Back to events</Link>
+        <Link to="/dashboard/admin" className="text-slate-500 text-sm hover:text-slate-700">Back to events</Link>
         <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
           <h1 className="text-xl font-bold text-slate-800">Live tracking – {event.name}</h1>
           <button type="button" onClick={doExport} disabled={exporting} className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-medium disabled:opacity-50">Export CSV</button>
@@ -81,7 +81,7 @@ export default function LiveTracking() {
           <section className="mb-6">
             <h2 className="font-semibold text-slate-800 mb-3">Per judge</h2>
             <ul className="space-y-2">
-              {stats.perJudge && stats.perJudge.map(function(j) {
+              {stats.perJudge && stats.perJudge.map(function (j) {
                 return (
                   <li key={j.judgeId} className="bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-medium text-slate-700">{j.email || j.judgeId}</span>
@@ -97,7 +97,7 @@ export default function LiveTracking() {
           <section>
             <h2 className="font-semibold text-slate-800 mb-3">By domain</h2>
             <ul className="space-y-2">
-              {stats.domainProgress && stats.domainProgress.map(function(d) {
+              {stats.domainProgress && stats.domainProgress.map(function (d) {
                 return (
                   <li key={d.domain} className="bg-white rounded-xl border border-slate-200 p-3">
                     <div className="flex justify-between text-sm mb-1">

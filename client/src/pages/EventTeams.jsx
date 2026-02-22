@@ -40,7 +40,7 @@ export default function EventTeams() {
   return (
     <div>
       <div className="mb-4">
-        <Link to="/admin" className="text-slate-500 text-sm hover:text-slate-700">← Events</Link>
+        <Link to="/dashboard/admin" className="text-slate-500 text-sm hover:text-slate-700">← Events</Link>
         <h1 className="text-xl font-bold text-slate-800 mt-1">{event.name} – Teams</h1>
       </div>
 
@@ -52,8 +52,8 @@ export default function EventTeams() {
           <button type="button" onClick={doPreview} className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Preview</button>
           {preview && (
             <button type="button" onClick={doImport} disabled={importing} className="rounded-lg bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700 disabled:opacity-50">
-            {importing ? 'Importing…' : 'Confirm import (' + preview.total + ' teams)'}
-          </button>
+              {importing ? 'Importing…' : 'Confirm import (' + preview.total + ' teams)'}
+            </button>
           )}
         </div>
         {preview && (

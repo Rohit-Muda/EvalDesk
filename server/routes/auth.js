@@ -29,14 +29,14 @@ router.get('/google/callback', (req, res, next) => {
     }
 
     const eventId = state.eventId;
-    
+
     // FIX: Normalize email to lowercase everywhere
     const normalizedEmail = user.email.toLowerCase();
-    
+
     // FIX: Only check domain restrictions if eventId is provided AND has restrictions
     if (eventId) {
       const allowedDomains = (await Event.findById(eventId).select('allowedDomains').lean())?.allowedDomains || [];
-      
+
       if (allowedDomains.length > 0) {
         const domain = normalizedEmail.split('@')[1]?.toLowerCase();
         if (!domain || !allowedDomains.includes(domain)) {
@@ -50,7 +50,7 @@ router.get('/google/callback', (req, res, next) => {
       .split(',')
       .map(e => e.trim().toLowerCase())
       .filter(Boolean);
-    
+
     let userRole = 'viewer'; // Default fallback role
 
     if (adminEmails.includes(normalizedEmail)) {
@@ -62,7 +62,7 @@ router.get('/google/callback', (req, res, next) => {
         eventId,
         judgeEmail: normalizedEmail
       }).lean();
-      
+
       if (allocation) {
         userRole = 'jury';
         console.log(`User ${normalizedEmail} assigned JURY role for event ${eventId}`);
@@ -74,7 +74,7 @@ router.get('/google/callback', (req, res, next) => {
       const anyAllocation = await JuryAllocation.findOne({
         judgeEmail: normalizedEmail
       }).lean();
-      
+
       if (anyAllocation) {
         userRole = 'jury';
         console.log(`User ${normalizedEmail} has jury allocation, set to JURY`);
@@ -93,11 +93,15 @@ router.get('/google/callback', (req, res, next) => {
 
     const token = signToken(user);
     const redirect = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.cookie('token', token, { 
-      httpOnly: true, 
-      maxAge: 7 * 24 * 60 * 60 * 1000, 
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production'
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('token', token, {
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      // In production the frontend and backend are on different subdomains:
+      // sameSite must be 'none' + secure:true so the browser sends the cookie cross-origin.
+      // In dev (localhost) use 'lax' + secure:false.
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
     });
     res.redirect(`${redirect}/?token=${token}`);
   })(req, res, next);
@@ -115,7 +119,12 @@ router.get('/me', verifyToken, async (req, res) => {
 });
 
 router.post('/logout', (_, res) => {
-  res.clearCookie('token');
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie('token', {
+    httpOnly: true,
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
+  });
   res.json({ ok: true });
 });
 
