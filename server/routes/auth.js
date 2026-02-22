@@ -33,17 +33,32 @@ router.get('/google/callback', (req, res, next) => {
       return res.redirect(`${process.env.FRONTEND_URL}/login?error=domain_not_allowed`);
     }
 
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    // FIX #1: Use lowercase for admin email comparison
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean);
+    
     if (adminEmails.includes(user.email.toLowerCase())) {
+      // FIX #2: Ensure admin role is set
       await User.updateOne({ _id: user._id }, { role: 'admin' });
       user.role = 'admin';
     } else {
+      // FIX #3: Use lowercase for jury email comparison
       const allocation = eventId
-        ? await JuryAllocation.findOne({ eventId, judgeEmail: user.email }).lean()
+        ? await JuryAllocation.findOne({ 
+            eventId, 
+            judgeEmail: user.email.toLowerCase() 
+          }).lean()
         : null;
+      
       if (allocation) {
+        // FIX #4: Set jury role if allocated
         await User.updateOne({ _id: user._id }, { role: 'jury' });
         user.role = 'jury';
+      } else {
+        // FIX #5: Explicitly set viewer role if not admin or jury
+        await User.updateOne({ _id: user._id }, { role: 'viewer' });
+        user.role = 'viewer';
       }
     }
 

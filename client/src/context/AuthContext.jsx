@@ -8,38 +8,54 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const loadUser = useCallback(async (token) => {
-    if (token) localStorage.setItem('token', token);
-    const t = token || localStorage.getItem('token');
-    if (!t) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
     try {
+      // FIX #1: Save token to localStorage if provided
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+
+      // FIX #2: Get token from localStorage or parameter
+      const t = token || localStorage.getItem('token');
+      if (!t) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      // FIX #3: Fetch user data from /api/auth/me
       const me = await authApi.me();
       setUser(me);
-    } catch {
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load user:', err.message);
       localStorage.removeItem('token');
       setUser(null);
-    } finally {
       setLoading(false);
     }
   }, []);
 
+  // FIX #4: Run only once on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
+    
+    // If token in URL, save it and clean URL
     if (token) {
       localStorage.setItem('token', token);
       window.history.replaceState({}, '', window.location.pathname || '/');
+      loadUser(token);
+    } else {
+      // Otherwise load from localStorage
+      loadUser();
     }
-    loadUser(token || undefined);
-  }, [loadUser]);
+  }, []); // FIX #5: Empty dependency array - run only once
 
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
-    } catch {}
+    } catch (err) {
+      console.error('Logout error:', err.message);
+    }
     localStorage.removeItem('token');
     setUser(null);
   }, []);

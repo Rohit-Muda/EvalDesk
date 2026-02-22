@@ -19,8 +19,18 @@ router.get('/event/:eventId/allocations', requireRole('admin'), async (req, res)
 router.post('/event/:eventId/allocations', requireRole('admin'), async (req, res) => {
   try {
     const { judgeEmail, domains, maxTeams } = req.body;
+    
+    // FIX #6: Validate judge email is provided
+    if (!judgeEmail || !judgeEmail.trim()) {
+      return res.status(400).json({ error: 'Judge email is required' });
+    }
+
+    // FIX #7: Use lowercase for email storage and lookup
     const allocation = await JuryAllocation.findOneAndUpdate(
-      { eventId: req.params.eventId, judgeEmail: (judgeEmail || '').trim() },
+      { 
+        eventId: req.params.eventId, 
+        judgeEmail: judgeEmail.trim().toLowerCase() 
+      },
       { $set: { domains: Array.isArray(domains) ? domains : [], maxTeams: Number(maxTeams) || 0 } },
       { upsert: true, new: true }
     ).lean();
@@ -50,9 +60,10 @@ function canJudgeAccess(judgeEmail, teamDomain, allocation) {
 
 router.get('/event/:eventId/my-teams', async (req, res) => {
   try {
+    // FIX #8: Use lowercase for jury email lookup
     const allocation = await JuryAllocation.findOne({
       eventId: req.params.eventId,
-      judgeEmail: req.userEmail,
+      judgeEmail: req.userEmail.toLowerCase(),
     }).lean();
 
     if (!allocation) return res.json([]);

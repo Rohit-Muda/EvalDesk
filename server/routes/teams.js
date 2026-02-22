@@ -20,7 +20,19 @@ router.post('/event/:eventId/preview', requireRole('admin'), async (req, res) =>
   try {
     const csv = req.body.csv || req.body.data;
     if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'CSV required' });
+    
+    // FIX #9: Validate CSV is not empty
+    if (csv.trim().length === 0) {
+      return res.status(400).json({ error: 'CSV cannot be empty' });
+    }
+
     const rows = parse(csv, { columns: true, skip_empty_lines: true, trim: true });
+    
+    // FIX #10: Validate rows exist
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({ error: 'CSV has no valid rows' });
+    }
+
     const headers = rows[0] ? Object.keys(rows[0]) : [];
     const nameCol = headers.find(h => /name|team/i.test(h)) || headers[0];
     const projectCol = headers.find(h => /project|title/i.test(h)) || headers[1] || nameCol;
@@ -40,9 +52,22 @@ router.post('/event/:eventId/import', requireRole('admin'), async (req, res) => 
   try {
     const event = await Event.findById(req.params.eventId);
     if (!event) return res.status(404).json({ error: 'Event not found' });
+    
     const csv = req.body.csv || req.body.data;
     if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'CSV required' });
+    
+    // FIX #11: Validate CSV is not empty
+    if (csv.trim().length === 0) {
+      return res.status(400).json({ error: 'CSV cannot be empty' });
+    }
+
     const rows = parse(csv, { columns: true, skip_empty_lines: true, trim: true });
+    
+    // FIX #12: Validate rows exist
+    if (!rows || rows.length === 0) {
+      return res.status(400).json({ error: 'CSV has no valid rows' });
+    }
+
     const headers = rows[0] ? Object.keys(rows[0]) : [];
     const nameCol = headers.find(h => /name|team/i.test(h)) || headers[0];
     const projectCol = headers.find(h => /project|title/i.test(h)) || headers[1] || nameCol;
