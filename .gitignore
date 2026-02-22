@@ -1,58 +1,41 @@
-# Root .gitignore for EvalDesk (client + server)
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.production.local
 
-# Node modules (applies recursively)
+# Dependencies
 node_modules/
+*/node_modules/
+package-lock.json
+*/package-lock.json
 
 # Build outputs
 dist/
 build/
-out/
-/.parcel-cache/
-/.vite/
-/.cache/
-
-# Dependency directories for monorepos / nested projects
-/client/dist/
-/client/build/
-
-# Environment files
-.env
-.env.*.local
+*/dist/
+*/build/
 
 # Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 *.log
-logs/
+npm-debug.log*
+yarn-error.log*
 
-# Test coverage
-coverage/
-.nyc_output/
-
-# Runtime files
-pids/
-*.pid
-*.seed
-
-# OS generated files
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Editors and IDEs
+# IDE
 .vscode/
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.iml
+*.swp
+*.swo
 
-# Package distribution
-*.tgz
+# OS
+.DS_Store
+Thumbs.db
 
-# Misc
-.env.local
+# Client
+client/dist/
+client/.env.production
+
+# Server
+server/.env.production
+server/.env.local

@@ -1,16 +1,22 @@
-# Server-specific ignores
-node_modules/
+# Environment variables - NEVER commit these
 .env
-npm-debug.log*
-logs/
-*.log
-pids/
-*.pid
-coverage/
-.nyc_output/
-db/*.sqlite
-uploads/
-.vscode/
-.DS_Store
+.env.local
+.env.*.local
+.env.production
+.env.production.local
 
-.vercel
+# Dependencies
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+.vscode/
+
+# Build
+dist/
+build/
