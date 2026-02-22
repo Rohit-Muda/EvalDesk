@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import cookieSession from 'cookie-session';
 import { connectDB } from './config/db.js';
 import passport from './config/passport.js';
 import authRoutes from './routes/auth.js';
@@ -21,6 +22,8 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Middleware
 app.use(cors({
   origin: function (origin, callback) {
@@ -31,6 +34,30 @@ app.use(cors({
   },
   credentials: true,
 }));
+
+// cookie-session: stores OAuth state in a signed cookie so it survives
+// Vercel's stateless function invocations (session travels in the browser)
+app.use(cookieSession({
+  name: 'oauth_session',
+  keys: [process.env.JWT_SECRET || 'dev-session-secret'],
+  maxAge: 10 * 60 * 1000, // 10 minutes — only needed during OAuth handshake
+  secure: isProduction,
+  sameSite: isProduction ? 'none' : 'lax',
+  httpOnly: true,
+}));
+
+// Passport v0.6+ requires regenerate() and save() on req.session.
+// cookie-session doesn't provide them, so we shim them.
+app.use((req, res, next) => {
+  if (req.session && !req.session.regenerate) {
+    req.session.regenerate = (cb) => { cb(); };
+  }
+  if (req.session && !req.session.save) {
+    req.session.save = (cb) => { cb(); };
+  }
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cookieParser());
